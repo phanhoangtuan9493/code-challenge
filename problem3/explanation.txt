@@ -1,0 +1,326 @@
+CODE REVIEW: Improvements from original.tsx to fix.tsx
+=======================================================
+
+This document explains all the enhancements and fixes made in fix.tsx compared to the original.tsx file.
+
+================================================================================
+1. INTERFACE IMPROVEMENTS (Lines 1-5)
+================================================================================
+
+ORIGINAL (Lines 1-9):
+- WalletBalance interface was missing the 'blockchain' property
+- FormattedWalletBalance interface was unnecessary and redundant
+
+FIX (Lines 1-5):
+✓ Added 'blockchain: string' to WalletBalance interface
+✓ Removed FormattedWalletBalance interface (no longer needed)
+
+IMPACT: 
+- TypeScript now has proper type checking for the blockchain property
+- Reduced code complexity by removing unnecessary interface
+- Fixed type safety issues throughout the component
+
+
+================================================================================
+2. PROPS INTERFACE REMOVAL (Lines 11-13)
+================================================================================
+
+ORIGINAL (Lines 11-13):
+- Created an empty Props interface that extends BoxProps
+- Unnecessarily verbose
+
+FIX (Line 25):
+✓ Directly use BoxProps in component definition
+
+IMPACT:
+- Cleaner, more concise code
+- No need for empty interface extension
+- Better follows React best practices
+
+
+================================================================================
+3. FUNCTION HOISTING (Lines 7-23)
+================================================================================
+
+ORIGINAL (Lines 19-34):
+- getPriority function defined INSIDE the component
+- Function recreated on every component render
+- Uses 'any' type for blockchain parameter
+
+FIX (Lines 7-23):
+✓ Moved getPriority OUTSIDE the component
+✓ Proper type annotation: blockchain is 'string'
+✓ Function created once and reused
+
+IMPACT:
+- Performance: Function not recreated on every render
+- Type Safety: Strong typing prevents errors
+- Maintainability: Easier to test and reuse
+
+
+================================================================================
+4. COMPONENT PROPS DESTRUCTURING (Line 14-15 vs Line 25-26)
+================================================================================
+
+ORIGINAL (Lines 14-15):
+const WalletPage: React.FC<Props> = (props: Props) => {
+  const { children, ...rest } = props;
+
+ISSUE: 
+- Destructures 'children' but never uses it
+- Redundant type annotation (props: Props)
+
+FIX (Lines 25-26):
+const WalletPage: React.FC<BoxProps> = (props) => {
+  const { ...rest } = props;
+
+IMPACT:
+✓ Removed unused 'children' variable
+✓ Cleaner code without redundant type annotation
+✓ No unused variables
+
+
+================================================================================
+5. TYPE ANNOTATIONS FOR HOOKS (Lines 16-17 vs 27-28)
+================================================================================
+
+ORIGINAL (Lines 16-17):
+const balances = useWalletBalances();
+const prices = usePrices();
+
+ISSUE: No explicit type annotations
+
+FIX (Lines 27-28):
+const balances: WalletBalance[] = useWalletBalances();
+const prices: Record<string, number> = usePrices();
+
+IMPACT:
+✓ Explicit type annotations improve code clarity
+✓ Better IDE autocomplete support
+✓ Catches type errors at compile time
+
+
+================================================================================
+6. CRITICAL BUG FIX IN FILTER LOGIC (Lines 37-44)
+================================================================================
+
+ORIGINAL (Lines 37-44):
+return balances.filter((balance: WalletBalance) => {
+  const balancePriority = getPriority(balance.blockchain);
+  if (lhsPriority > -99) {  // ❌ ERROR: 'lhsPriority' is undefined!
+    if (balance.amount <= 0) {  // ❌ LOGIC ERROR: Keeping zero/negative amounts
+      return true;
+    }
+  }
+  return false  // ❌ Returns false for everything else!
+});
+
+CRITICAL ISSUES:
+1. 'lhsPriority' variable doesn't exist (undefined variable error)
+2. Logic is inverted - keeps balances with amount <= 0
+3. Returns false for valid balances, true for invalid ones
+4. Would crash or produce incorrect results
+
+FIX (Lines 33-37):
+return balances
+  .filter((balance: WalletBalance) => {
+    const balancePriority = getPriority(balance.blockchain);
+    // Keep balances with valid priority and positive amounts
+    return balancePriority > -99 && balance.amount > 0;
+  })
+
+IMPACT:
+✓ Fixed undefined variable error
+✓ Correct logic: only keeps balances with valid blockchain AND positive amount
+✓ Clear, readable condition
+✓ Proper filtering of invalid/empty balances
+
+
+================================================================================
+7. IMPROVED SORTING LOGIC (Lines 45-53 vs 38-43)
+================================================================================
+
+ORIGINAL (Lines 45-53):
+.sort((lhs: WalletBalance, rhs: WalletBalance) => {
+  const leftPriority = getPriority(lhs.blockchain);
+  const rightPriority = getPriority(rhs.blockchain);
+  if (leftPriority > rightPriority) {
+    return -1;
+  } else if (rightPriority > leftPriority) {
+    return 1;
+  }
+  // ❌ Missing return statement for equal priorities
+});
+
+ISSUE: No return value when priorities are equal (undefined behavior)
+
+FIX (Lines 38-43):
+.sort((lhs: WalletBalance, rhs: WalletBalance) => {
+  const leftPriority = getPriority(lhs.blockchain);
+  const rightPriority = getPriority(rhs.blockchain);
+  // Sort in descending order by priority
+  return rightPriority - leftPriority;
+});
+
+IMPACT:
+✓ Concise one-liner sort
+✓ Handles equal priorities correctly (returns 0)
+✓ More readable and maintainable
+✓ Standard JavaScript sorting pattern
+
+
+================================================================================
+8. INCORRECT USEMEMO DEPENDENCIES (Line 54)
+================================================================================
+
+ORIGINAL (Line 54):
+}, [balances, prices]);
+
+ISSUE: 
+- 'prices' is in dependencies but NOT used in the memoized computation
+- Would cause unnecessary recalculations when prices change
+
+FIX (Line 44):
+}, [balances]);
+
+IMPACT:
+✓ Correct dependencies - only balances affects the filtered/sorted result
+✓ Prevents unnecessary recalculations
+✓ Better performance
+
+
+================================================================================
+9. ELIMINATED INTERMEDIATE VARIABLE (Lines 56-61)
+================================================================================
+
+ORIGINAL (Lines 56-61):
+const formattedBalances = sortedBalances.map((balance: WalletBalance) => {
+  return {
+    ...balance,
+    formatted: balance.amount.toFixed()
+  }
+})
+
+ISSUE:
+- Creates intermediate array that's never used
+- formattedBalances variable created but ignored
+- Unnecessary memory allocation
+
+FIX:
+✓ Removed entirely - formatting moved inline in rows
+
+IMPACT:
+✓ No wasted memory on unused variable
+✓ Cleaner code flow
+✓ Better performance
+
+
+================================================================================
+10. ROWS GENERATION IMPROVEMENTS (Lines 63-74 vs 47-62)
+================================================================================
+
+ORIGINAL (Lines 63-74):
+const rows = sortedBalances.map((balance: FormattedWalletBalance, index: number) => {
+  const usdValue = prices[balance.currency] * balance.amount;
+  return (
+    <WalletRow 
+      className={classes.row}
+      key={index}  // ❌ ANTI-PATTERN: Using array index as key
+      amount={balance.amount}
+      usdValue={usdValue}
+      formattedAmount={balance.formatted}  // ❌ Property doesn't exist on WalletBalance
+    />
+  )
+})
+
+ISSUES:
+1. Wrong type: FormattedWalletBalance instead of WalletBalance
+2. Using array index as key (React anti-pattern)
+3. Accessing non-existent 'formatted' property
+4. Not memoized - recalculates on every render even if data unchanged
+
+FIX (Lines 47-62):
+const rows = useMemo(() => {
+  return sortedBalances.map((balance: WalletBalance) => {
+    const formattedAmount = balance.amount.toFixed();
+    const usdValue = prices[balance.currency] * balance.amount;
+    
+    return (
+      <WalletRow
+        className={classes.row}
+        key={balance.currency}  // ✓ Using unique identifier
+        amount={balance.amount}
+        usdValue={usdValue}
+        formattedAmount={formattedAmount}
+      />
+    );
+  });
+}, [sortedBalances, prices]);
+
+IMPACT:
+✓ Wrapped in useMemo for performance
+✓ Correct dependencies [sortedBalances, prices]
+✓ Using balance.currency as key (unique identifier)
+✓ Formatting done inline where needed
+✓ Correct types throughout
+✓ Only recalculates when sortedBalances or prices change
+
+
+================================================================================
+11. RETURN STATEMENT (Lines 76-80 vs 64)
+================================================================================
+
+ORIGINAL (Lines 76-80):
+return (
+  <div {...rest}>
+    {rows}
+  </div>
+)
+
+FIX (Line 64):
+return <div {...rest}>{rows}</div>;
+
+IMPACT:
+✓ More concise (no unnecessary parentheses for single-line JSX)
+✓ Proper semicolon
+✓ Cleaner formatting
+
+
+================================================================================
+SUMMARY OF ALL IMPROVEMENTS
+================================================================================
+
+CORRECTNESS FIXES:
+1. Fixed critical undefined variable bug (lhsPriority)
+2. Fixed inverted filter logic
+3. Fixed missing return in sort function
+4. Fixed TypeScript type errors
+5. Fixed React key anti-pattern (index -> unique ID)
+6. Added missing blockchain property to interface
+
+PERFORMANCE IMPROVEMENTS:
+1. Moved getPriority outside component (avoid recreation)
+2. Fixed useMemo dependencies (removed 'prices' from sortedBalances)
+3. Added useMemo to rows generation
+4. Eliminated unnecessary intermediate array (formattedBalances)
+5. Combined operations more efficiently
+
+CODE QUALITY:
+1. Better TypeScript typing throughout
+2. Removed unused variables (children, formattedBalances)
+3. Removed unnecessary interfaces (Props, FormattedWalletBalance)
+4. More readable and maintainable code
+5. Added helpful comments
+6. Followed React best practices
+
+MAINTAINABILITY:
+1. Clearer intent with comments
+2. More testable (getPriority can be tested independently)
+3. Easier to debug
+4. Better separation of concerns
+5. More idiomatic JavaScript/React patterns
+
+RESULT:
+The fixed version is more performant, type-safe, bug-free, and maintainable 
+while being shorter and more readable than the original.
+

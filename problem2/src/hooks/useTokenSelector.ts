@@ -1,0 +1,65 @@
+import { useState, useEffect } from 'react';
+import type { Token } from '../types';
+
+interface UseTokenSelectorProps {
+  tokens: Token[];
+  selectedToken: string;
+  onSelectToken: (currency: string) => void;
+  filterByBalance?: boolean;
+}
+
+export function useTokenSelector({ tokens, selectedToken, onSelectToken, filterByBalance = false }: UseTokenSelectorProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const selectedTokenData = tokens.find(t => t.currency === selectedToken);
+
+  const filteredTokens = tokens.filter(token => {
+    const matchesSearch = token.currency.toLowerCase().includes(searchTerm.toLowerCase());
+    const hasBalance = filterByBalance ? token.balance > 0 : true;
+    return matchesSearch && hasBalance;
+  });
+
+  // Handle body scroll lock
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
+
+  const handleSelectToken = (currency: string) => {
+    onSelectToken(currency);
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
+  const handleOpen = () => {
+    setIsOpen(true);
+  };
+
+  return {
+    // State
+    isOpen,
+    searchTerm,
+    selectedTokenData,
+    filteredTokens,
+    // Actions
+    setSearchTerm,
+    handleSelectToken,
+    handleClose,
+    handleOpen,
+  };
+}
+
